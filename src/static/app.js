@@ -21,11 +21,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const spotsLeft = details.max_participants - details.participants.length;
 
-        // Build participants HTML
+        // Build participants HTML (with delete button for each participant)
         let participantsHtml = "";
         if (details.participants && details.participants.length > 0) {
           participantsHtml = `<ul class="participants-list">
-            ${details.participants.map((p) => `<li class="participant-item">${p}</li>`).join("")}
+            ${details.participants
+              .map(
+                (p) =>
+                  `<li class="participant-item"><span class="participant-email">${p}</span><button type="button" class="participant-delete" data-activity="${encodeURIComponent(
+                    name
+                  )}" data-email="${encodeURIComponent(p)}" title="Remove participant ${p}" aria-label="Remove participant ${p}">\u00d7</button></li>`
+              )
+              .join("")}
           </ul>`;
         } else {
           participantsHtml = `<p class="no-participants">No participants yet</p>`;
@@ -44,6 +51,49 @@ document.addEventListener("DOMContentLoaded", () => {
         `;
 
         activitiesList.appendChild(activityCard);
+
+        // Wire up delete buttons for participants inside this card
+        activityCard.querySelectorAll(".participant-delete").forEach((btn) => {
+          btn.addEventListener("click", async (e) => {
+            e.preventDefault();
+            const encodedActivity = btn.dataset.activity;
+            const encodedEmail = btn.dataset.email;
+            const activityName = decodeURIComponent(encodedActivity);
+            const email = decodeURIComponent(encodedEmail);
+
+            if (!confirm(`Remove ${email} from ${activityName}?`)) return;
+
+            try {
+              const resp = await fetch(
+                `/activities/${encodeURIComponent(activityName)}/signup?email=${encodeURIComponent(email)}`,
+                { method: "DELETE" }
+              );
+              const resJson = await resp.json();
+
+              if (resp.ok) {
+                messageDiv.textContent = resJson.message;
+                messageDiv.className = "message success";
+                messageDiv.classList.remove("hidden");
+                // Refresh activities so the UI updates
+                fetchActivities();
+              } else {
+                messageDiv.textContent = resJson.detail || "Failed to remove participant";
+                messageDiv.className = "message error";
+                messageDiv.classList.remove("hidden");
+              }
+
+              // Auto-hide
+              setTimeout(() => {
+                messageDiv.classList.add("hidden");
+              }, 4000);
+            } catch (err) {
+              messageDiv.textContent = "Failed to remove participant. Please try again.";
+              messageDiv.className = "message error";
+              messageDiv.classList.remove("hidden");
+              console.error("Error removing participant:", err);
+            }
+          });
+        });
 
         // Add option to select dropdown
         const option = document.createElement("option");
